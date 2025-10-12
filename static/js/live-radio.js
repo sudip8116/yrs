@@ -102,7 +102,6 @@ class LiveRadio {
     );
     this.barAnim.stop();
     this.fetchSong();
-    setInterval(() => this.fetchBisi(), 2000);
   }
 
   togglePlayPause() {
@@ -132,7 +131,9 @@ class LiveRadio {
         this.albumBackground.style.backgroundImage = `url(data:image/png;base64,${data.image})`;
         this.audioPlayer.onloadedmetadata = () => {
           this.songLoaded = true;
-          if (this.playing) this.togglePlayPause(); // sync state
+          if (this.playing) {
+            this.togglePlayPause(); // sync state
+          }
         };
       })
       .catch((err) => console.error("Fetch song error:", err));
@@ -149,7 +150,7 @@ class LiveRadio {
       .catch((err) => console.error(err));
   }
 
-  fetchBisi() {
+  update() {
     fetch("/get-bisi")
       .then((res) => res.json())
       .then((data) => {

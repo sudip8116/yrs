@@ -9,7 +9,4 @@ services:
     envVars:
       - key: FLASK_ENV
         value: production
-  - type: worker
-    name: radio-worker
-    env: python
-    startCommand: python radio_worker.py
+

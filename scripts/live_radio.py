@@ -141,12 +141,12 @@ class LiveRadio:
             self.song_id = randint(1111, 9999)
 
         self.background.pick_random()
-        VarManager.set("song-path", str(self.current_song.path))
+        VarManager.set("song-path", {"path": str(self.current_song.path)})
         VarManager.set(
-            "song_start_data", {"t": time() % LiveRadio.mod, "mod": LiveRadio.mod}
+            "song-start-data", {"t": time() % LiveRadio.mod, "mod": LiveRadio.mod}
         )
         VarManager.set(
-            "bisi", {"bi": self.background.current_index, "si": self.song_id}
+            "bi-si", {"bi": self.background.current_index, "si": self.song_id}
         )
 
     def _load_song(self):
