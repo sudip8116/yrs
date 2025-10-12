@@ -1,66 +1,27 @@
-class Bar {
-  constructor(element) {
-    this.element = element;
-    this.height = 0;
-  }
-
-  update(targetHeight, color) {
-    this.height = targetHeight;
-    this.element.style.height = `${this.height}%`;
-    this.element.style.background = `
-      linear-gradient(180deg, rgba(255, 255, 255, 0.5), ${color})
-    `;
-    this.element.style.transition = "height 0.3s ease, background 0.4s ease";
-  }
-}
-
-class BarAnimation {
+class GlowAnimation {
   constructor() {
-    this.album_background = document.getElementById("album-background");
-    this.bars = [];
-    this.interval = null;
-    this.animationSpeed = 500; // ms
-    this.init();
+    this.element = document.querySelector("#album-background");
   }
-
-  init() {
-    this.album_background.innerHTML = "";
-    this.bars = [];
-
-    const width = this.album_background.getBoundingClientRect().width;
-    const barWidth = Math.max(10, Math.min(22, width / 40)); // adaptive bar width
-    const count = Math.floor(width / (barWidth + 5)); // spacing
-
-    for (let i = 0; i < count; i++) {
-      const div = document.createElement("div");
-      div.classList.add("bar");
-      div.style.width = `${barWidth}px`;
-      this.album_background.appendChild(div);
-      this.bars.push(new Bar(div));
-    }
-  }
-
   start() {
-    clearInterval(this.interval);
-    this.interval = setInterval(() => {
-      const baseColor = this.randomColor();
-      this.bars.forEach((bar, i) => {
-        const wave = Math.sin((Date.now() / 300 + i) / 2);
-        const random = Math.random() * 15;
-        const h = 20 + wave * 25 + random;
-        bar.update(h, baseColor);
-      });
-    }, this.animationSpeed);
+    setInterval(() => {
+      this.element.style.boxShadow = `0 0 10px ${this.getRadomColor()}, 0 0 20px ${this.getRadomColor()},
+    0 0 40px ${this.getRadomColor()}, 0 0 60px ${this.getRadomColor()},
+    0 0 80px ${this.getRadomColor()}`;
+    }, 500);
   }
 
   stop() {
-    clearInterval(this.interval);
-    this.bars.forEach((bar) => bar.update(5, "rgba(255,255,255,0.2)"));
+    this.element.style.boxShadow = `box-shadow: 0 0 10px rgba(0, 0, 0, 0), 0 0 20px rgba(0, 0, 0, 0),
+    0 0 40px rgba(0, 0, 0, 0), 0 0 60px rgba(0, 0, 0, 0),
+    0 0 80px rgba(0, 0, 0, 0);`;
   }
 
-  randomColor() {
-    const hue = Math.floor(Math.random() * 360);
-    return `hsl(${hue}, 80%, 60%)`;
+  getRadomColor() {
+    const r = Math.floor(Math.random() * 255);
+    const g = Math.floor(Math.random() * 255);
+    const b = Math.floor(Math.random() * 255);
+    const a = 0.3 + Math.random() * 0.7;
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
   }
 }
 
@@ -87,10 +48,8 @@ class LiveRadio {
     this.songLoaded = false;
     this.songPath = "";
     this.songId = 0;
-
-    this.barAnim = new BarAnimation();
     this.backgroundChanger = new BackgroundChanger();
-
+    this.backGlow = new GlowAnimation();
     this.init();
   }
 
@@ -100,7 +59,7 @@ class LiveRadio {
     this.audioPlayer.addEventListener("timeupdate", () =>
       this.updateTimeSlider()
     );
-    this.barAnim.stop();
+    this.backGlow.stop();
     this.fetchSong();
   }
 
@@ -110,13 +69,13 @@ class LiveRadio {
       this.syncPosition();
       this.audioPlayer.play().catch(console.error);
       this.playBtn.textContent = "❚❚";
-      this.barAnim.start();
       this.albumArt.classList.add("rot");
+      this.backGlow.start();
     } else {
       this.audioPlayer.pause();
       this.playBtn.textContent = "▶";
-      this.barAnim.stop();
       this.albumArt.classList.remove("rot");
+      this.backGlow.stop();
     }
     this.playing = !this.playing;
   }
@@ -177,6 +136,5 @@ const liveRadio = new LiveRadio();
 
 liveRadio.update();
 setInterval(() => liveRadio.update(), 2000);
-window.addEventListener("resize", () => liveRadio.barAnim.init());
 
 console.log("🎵 Live Radio Debug: Ready!");
