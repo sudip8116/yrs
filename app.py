@@ -112,5 +112,5 @@ def get_bisi():
     return jsonify(VarManager.get("bi-si", {"bi": 0, "si": 0}))
 
 
-if __name__ == "__main__":
-    app.run("0.0.0.0")
+# if __name__ == "__main__":
+#     app.run("0.0.0.0")
