@@ -132,6 +132,7 @@ class LiveRadio {
         this.audioPlayer.onloadedmetadata = () => {
           this.songLoaded = true;
           if (this.playing) {
+            this.playing = false;
             this.togglePlayPause(); // sync state
           }
         };
