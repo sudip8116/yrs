@@ -1,7 +1,6 @@
 import json
 from .path_manager import PathManager
 
-
 class VarManager:
     path = "save-data"
 
@@ -12,12 +11,15 @@ class VarManager:
     @staticmethod
     def set(key: str, value):
         with open(PathManager.get_path(f"{VarManager.path}/{key}.json"), "w") as f:
-            f.write(json.dumps(value))
+            json.dump(value, f)
 
     @staticmethod
-    def get(key: str, default):
+    def get(key: str, default=None):
         f_path = PathManager.get_path(f"{VarManager.path}/{key}.json")
         if not PathManager.exists_path(f_path):
             return default
         with open(f_path, "r") as f:
-            return f.read()
+            try:
+                return json.load(f)
+            except:
+                return default

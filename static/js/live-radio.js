@@ -78,15 +78,15 @@ class BackgroundChanger {
 class LiveRadio {
   constructor() {
     this.audioPlayer = document.querySelector("audio");
-    this.song_title = document.querySelector("#song-title");
-    this.play_btn = document.querySelector("#play-btn");
-    this.album_art = document.querySelector("#player-album");
-    this.album_background = document.querySelector("#album-background");
-    this.time_slider = document.querySelector("#time-slider");
-
+    this.songTitle = document.querySelector("#song-title");
+    this.playBtn = document.querySelector("#play-btn");
+    this.albumArt = document.querySelector("#player-album");
+    this.albumBackground = document.querySelector("#album-background");
+    this.timeSlider = document.querySelector("#time-slider");
     this.playing = false;
-    this.song_loaded = false;
-    this.song_index = 0;
+    this.songLoaded = false;
+    this.songPath = "";
+    this.songId = 0;
 
     this.barAnim = new BarAnimation();
     this.backgroundChanger = new BackgroundChanger();
@@ -96,96 +96,83 @@ class LiveRadio {
 
   init() {
     this.audioPlayer.volume = 1;
-    this.play_btn.addEventListener("click", () => this.togglePlayPause());
+    this.playBtn.addEventListener("click", () => this.togglePlayPause());
     this.audioPlayer.addEventListener("timeupdate", () =>
-      this.handleTimeUpdate()
+      this.updateTimeSlider()
     );
     this.barAnim.stop();
-    this.getSong();
+    this.fetchSong();
+    setInterval(() => this.fetchBisi(), 2000);
   }
 
   togglePlayPause() {
-    if (!this.song_loaded) return;
-
+    if (!this.songLoaded) return;
     if (!this.playing) {
-      this.sync();
+      this.syncPosition();
       this.audioPlayer.play().catch(console.error);
-      this.play_btn.textContent = "❚❚";
+      this.playBtn.textContent = "❚❚";
       this.barAnim.start();
-      this.album_art.classList.add("rot");
+      this.albumArt.classList.add("rot");
     } else {
       this.audioPlayer.pause();
-      this.play_btn.textContent = "▶";
+      this.playBtn.textContent = "▶";
       this.barAnim.stop();
-      this.album_art.classList.remove("rot");
+      this.albumArt.classList.remove("rot");
     }
     this.playing = !this.playing;
   }
 
-  getSong() {
-    this.song_loaded = false;
-
+  fetchSong() {
     fetch("/get-song")
       .then((res) => res.json())
       .then((data) => {
-        if (data.error) return console.error("❌ Song load failed!");
-
-        this.song_title.textContent = data.title;
-        this.audioPlayer.src = `data:audio/mp3;base64,${data.audio}`;
-        this.album_background.style.backgroundImage = `url("data:image/png;base64,${data.image}")`;
-
+        if (data.error) return console.warn("❌ Song load failed");
+        this.audioPlayer.src = "data:audio/mp3;base64," + data.audio;
+        this.songTitle.textContent = data.title || "Unknown Song";
+        this.albumBackground.style.backgroundImage = `url(data:image/png;base64,${data.image})`;
         this.audioPlayer.onloadedmetadata = () => {
-          this.song_loaded = true;
-          console.log("✅ Song loaded");
-
-          if (this.playing) {
-            this.playing = false;
-            this.togglePlayPause();
-          }
+          this.songLoaded = true;
+          if (this.playing) this.togglePlayPause(); // sync state
         };
-      });
+      })
+      .catch((err) => console.error("Fetch song error:", err));
   }
 
-  sync() {
+  syncPosition() {
     fetch("/get-song-position")
       .then((res) => res.json())
       .then((data) => {
-        if (data.error) {
-          this.audioPlayer.currentTime = 0;
-          return;
-        }
+        if (!data || !("t" in data)) return;
         this.audioPlayer.currentTime =
           ((Date.now() / 1000) % data.mod) - data.t;
-      });
+      })
+      .catch((err) => console.error(err));
   }
 
-  handleTimeUpdate() {
-    if (!this.audioPlayer.duration) return;
-    this.time_slider.value =
-      (this.audioPlayer.currentTime / this.audioPlayer.duration) * 100;
-  }
-
-  check_song_index(index) {
-    if (this.song_index !== index) {
-      this.song_index = index;
-      this.getSong();
-    }
-  }
-
-  update() {
+  fetchBisi() {
     fetch("/get-bisi")
       .then((res) => res.json())
       .then((data) => {
-        console.log(data);
-        if ("error" in data) return console.log("bisi failed!");
+        if (!data || "error" in data) return;
         this.backgroundChanger.changeBackground(data.bi);
-        this.check_song_index(data.si);
-      });
+        if (this.songId !== data.si) {
+          this.songId = data.si;
+          this.songLoaded = false;
+          this.fetchSong(); // load new song
+        }
+      })
+      .catch((err) => console.error(err));
+  }
+
+  updateTimeSlider() {
+    if (!this.audioPlayer.duration) return;
+    this.timeSlider.value =
+      (this.audioPlayer.currentTime / this.audioPlayer.duration) * 100;
   }
 }
 
-// 🎧 Initialize and start updating
 const liveRadio = new LiveRadio();
+
 liveRadio.update();
 setInterval(() => liveRadio.update(), 2000);
 window.addEventListener("resize", () => liveRadio.barAnim.init());

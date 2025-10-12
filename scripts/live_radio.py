@@ -8,12 +8,16 @@ from .path_manager import PathManager
 
 
 class Song:
-    def __init__(self, song_json: str):
-        self.json_data = song_json
-        self.duration = self._parse_duration(song_json)
+    def __init__(self, path):
+        self.path = path
+        self.duration = 0
+        try:
+            with open(self.path, "r") as f:
+                self.duration = self._parse_duration(f.read())
+        except Exception as e:
+            print(f"[Song] Error loading {path}: {e}")
 
     def _parse_duration(self, song_json: str) -> int:
-        """Extract and convert duration (HH:MM:SS or MM:SS) → seconds"""
         try:
             data = json.loads(song_json)
             duration_str = data.get("duration", "0")
@@ -43,16 +47,10 @@ class AudioManager:
         self.load_song_list()
 
     def get_song(self, index: int):
-        """Return (success, song_json_string)"""
         if not (0 <= index < len(self.song_list)):
             return False, None
-        try:
-            path = PathManager.get_path(f"{self.audio_path}/{self.song_list[index]}")
-            with open(path, "r") as f:
-                return True, f.read()
-        except Exception as e:
-            print(f"[AudioManager] Failed to load song: {e}")
-            return False, None
+        path = PathManager.get_path(f"{self.audio_path}/{self.song_list[index]}")
+        return True, path
 
     def get_random_index(self) -> int:
         return randint(0, len(self.song_list) - 1) if self.song_list else -1
@@ -90,12 +88,10 @@ class BackgroundManager:
                 for f in os.listdir(bg_path)
                 if os.path.isfile(os.path.join(bg_path, f))
             ]
-
             if not files:
                 self.max_count = 0
                 return
 
-            # STEP 1: Rename to temp names
             for i, f in enumerate(files):
                 src = os.path.join(bg_path, f)
                 temp = os.path.join(bg_path, f"__temp_{i + 1}.jpg")
@@ -104,7 +100,6 @@ class BackgroundManager:
                         os.remove(temp)
                     os.rename(src, temp)
 
-            # STEP 2: Rename to final format
             temp_files = sorted(
                 f for f in os.listdir(bg_path) if f.startswith("__temp_")
             )
@@ -117,7 +112,6 @@ class BackgroundManager:
 
             self.max_count = len(temp_files)
             print(f"[BackgroundManager] {self.max_count} backgrounds ready.")
-
         except Exception as e:
             print(f"[BackgroundManager] Rename error: {e}")
 
@@ -137,31 +131,22 @@ class LiveRadio:
         self.play_index = 0
         self.song_id = 0
         self.current_song: "Song" = None
+        self.lock = Lock()
 
         self.running = False
         self.thread: Thread | None = None
-        self.lock = Lock()
 
     def _update_start_data(self):
         if not self.song_id:
             self.song_id = randint(1111, 9999)
 
         self.background.pick_random()
-
+        VarManager.set("song-path", str(self.current_song.path))
         VarManager.set(
-            "song_start_data",
-            {
-                "t": time() % LiveRadio.mod,
-                "mod": LiveRadio.mod,
-            },
+            "song_start_data", {"t": time() % LiveRadio.mod, "mod": LiveRadio.mod}
         )
-
         VarManager.set(
-            "bisi",
-            {
-                "bi": self.background.current_index,
-                "si": self.song_id,
-            },
+            "bisi", {"bi": self.background.current_index, "si": self.song_id}
         )
 
     def _load_song(self):
@@ -169,9 +154,9 @@ class LiveRadio:
             print("[LiveRadio] ⚠️ No songs available.")
             return
 
-        suc, song_data = self.audio.get_song(self.play_index)
+        suc, song_path = self.audio.get_song(self.play_index)
         if suc:
-            self.current_song = Song(song_data)
+            self.current_song = Song(song_path)
             self._update_start_data()
             print(f"[LiveRadio] ▶ Now playing index {self.play_index}")
         else:
@@ -179,36 +164,30 @@ class LiveRadio:
             self._load_song()
 
     def start(self):
-        """Start the live radio thread"""
         if self.thread and self.thread.is_alive():
             print("[LiveRadio] Already running.")
             return
-
         self.running = True
         self.thread = Thread(
-            target=self._thread_loop, daemon=True, name="LiveRadioThread"
+            target=self._thread_loop, daemon=False, name="LiveRadioThread"
         )
         self.thread.start()
         print("[LiveRadio] 🟢 Radio started.")
 
     def stop(self):
-        """Stop radio thread safely"""
         self.running = False
         if self.thread and self.thread.is_alive():
             self.thread.join(timeout=5)
         print("[LiveRadio] 🔴 Radio stopped.")
 
     def restart(self):
-        """Restart radio playback"""
         self.stop()
         self.play_index = 0
         self.start()
 
     def _thread_loop(self):
-        """Main playback loop"""
         self.current_time = 0
         self._load_song()
-
         while self.running:
             with self.lock:
                 if not self.current_song:
@@ -216,14 +195,10 @@ class LiveRadio:
                     continue
 
                 if self.current_time >= self.current_song.duration:
-                    if self.audio.is_empty():
-                        sleep(1)
-                        continue
                     self.song_id = 0
                     self.play_index = self.audio.get_random_index()
                     self._load_song()
                     self.current_time = 0
 
                 self.current_time += 1
-
             sleep(1)
