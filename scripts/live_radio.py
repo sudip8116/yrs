@@ -14,6 +14,7 @@ class Song:
         try:
             with open(self.path, "r") as f:
                 self.duration = self._parse_duration(f.read())
+
         except Exception as e:
             print(f"[Song] Error loading {path}: {e}")
 
@@ -53,7 +54,7 @@ class AudioManager:
         return True, path
 
     def get_random_index(self) -> int:
-        return randint(0, len(self.song_list) - 1) if self.song_list else -1
+        return randint(1111, 9999) % len(self.song_list) if self.song_list else -1
 
     def is_empty(self) -> bool:
         return not self.song_list
@@ -68,6 +69,20 @@ class AudioManager:
         except Exception as e:
             print(f"[AudioManager] Failed to load song list: {e}")
             self.song_list = []
+
+    def save_song(self, file_name, song_json):
+        with open(
+            PathManager.get_path(f"{AudioManager.audio_path}/{file_name}"), "w"
+        ) as f:
+            f.write(json.dumps(song_json, indent=4))
+
+    def delete_song(self, file):
+        f_path = PathManager.get_path(f"{AudioManager.audio_path}/{file}")
+        try:
+            os.remove(f_path)
+            return True
+        except:
+            return False
 
 
 class BackgroundManager:
@@ -137,8 +152,8 @@ class LiveRadio:
         self.thread: Thread | None = None
 
     def _update_start_data(self):
-        if not self.song_id:
-            self.song_id = randint(1111, 9999)
+
+        self.song_id = randint(1111, 9999)
 
         self.background.pick_random()
         VarManager.set("song-path", {"path": str(self.current_song.path)})
@@ -154,13 +169,13 @@ class LiveRadio:
             print("[LiveRadio] ⚠️ No songs available.")
             return
 
+        self.play_index = self.audio.get_random_index()
         suc, song_path = self.audio.get_song(self.play_index)
         if suc:
             self.current_song = Song(song_path)
             self._update_start_data()
             print(f"[LiveRadio] ▶ Now playing index {self.play_index}")
         else:
-            self.play_index = self.audio.get_random_index()
             self._load_song()
 
     def start(self):
@@ -182,7 +197,6 @@ class LiveRadio:
 
     def restart(self):
         self.stop()
-        self.play_index = 0
         self.start()
 
     def _thread_loop(self):
@@ -195,8 +209,6 @@ class LiveRadio:
                     continue
 
                 if self.current_time >= self.current_song.duration:
-                    self.song_id = 0
-                    self.play_index = self.audio.get_random_index()
                     self._load_song()
                     self.current_time = 0
 
