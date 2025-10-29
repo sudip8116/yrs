@@ -1,10 +1,8 @@
-from flask import Flask
-from flask import request, render_template, Response, jsonify
+from flask import Flask, request, render_template, Response, jsonify
 from scripts.process_variable import VarManager
 from scripts.path_manager import PathManager
 from scripts.live_radio import LiveRadio
 import os
-
 
 AUTH_KEY = "3f9a7b2c1d8e4f6a0b9c2d7e8f1a3b"
 app = Flask(__name__, static_url_path="/static")
@@ -23,54 +21,52 @@ VarManager.set(
         )
     },
 )
-live_radio = LiveRadio()
+
+live_radio = LiveRadio()  # no threading now
 live_radio.start()
+# -----------------------------
+# Admin routes
+# -----------------------------
 
 
-# admin routes
 @app.route("/upload-song", methods=["POST"])
 def upload_song():
     if request.headers.get("auth", "null") != AUTH_KEY:
-        return "Authorizaion Failed"
+        return "Authorization Failed"
     json_data = request.get_json()
     save_name = request.headers.get("file-name", None)
     live_radio.audio.save_song(save_name, json_data)
     return "Success"
 
 
-@app.route("/update-songs-list")
-def update_songs_list():
-    if request.headers.get("auth", "null") != AUTH_KEY:
-        return "Authorizaion Failed"
-    live_radio.audio.load_song_list()
-    return "Success"
-
-
-@app.route("/get-songs-list")
-def get_song_list():
-    if request.headers.get("auth", "null") != AUTH_KEY:
-        return jsonify([])
-    return jsonify(live_radio.audio.song_list)
-
-
 @app.route("/delete-song")
-def delete_songs():
+def delete_song():
     if request.headers.get("auth", "null") != AUTH_KEY:
-        return "Authenticaoin Failed"
+        return "Authorization Failed"
     file = request.headers.get("file-name")
     res = live_radio.audio.delete_song(file)
-    return f"{res}"
+    return str(res)
 
 
 @app.route("/restart-player")
 def restart_player():
     if request.headers.get("auth", "null") != AUTH_KEY:
-        return "failed to restart"
+        return "Failed to restart"
     live_radio.restart()
-    return f"player restarted"
+    return "Player restarted"
 
 
-# public routes
+@app.route("/get-song-list")
+def get_song_lists():
+    if request.headers.get("auth", "null") != AUTH_KEY:
+        return jsonify([])
+    live_radio.restart()
+    return jsonify(live_radio.audio.get_song_list())
+
+
+# -----------------------------
+# Public routes
+# -----------------------------
 
 
 @app.route("/")
@@ -85,21 +81,20 @@ def live_radio_page():
 
 @app.route("/get-song")
 def get_song():
-    song_path = VarManager.get(
-        "song-path",
-        {
-            "path": str(
-                PathManager.get_path(
-                    f"audios/{os.listdir(PathManager.get_path('audios'))[0]}"
-                )
-            )
-        },
-    )
-    print(song_path)
-    if song_path and os.path.exists(song_path["path"]):
-        with open(song_path["path"], "r") as f:
-            return Response(f.read(), mimetype="application/json")
-    return jsonify({"error": True})
+    song_dir = PathManager.get_path("audios")
+    song_files = os.listdir(song_dir)
+    if not song_files:
+        return jsonify({"error": True, "message": "No songs found"})
+
+    current_song = VarManager.get("song-path", None)
+    if not current_song or not os.path.exists(current_song["path"]):
+        # pick next available song automatically
+        next_song_path = PathManager.get_path(f"audios/{song_files[0]}")
+        VarManager.set("song-path", {"path": str(next_song_path)})
+        current_song = {"path": str(next_song_path)}
+
+    with open(current_song["path"], "r") as f:
+        return Response(f.read(), mimetype="application/json")
 
 
 @app.route("/get-song-position")
@@ -112,5 +107,5 @@ def get_bisi():
     return jsonify(VarManager.get("bi-si", {"bi": 0, "si": 0}))
 
 
-# if __name__ == "__main__":
-#     app.run("0.0.0.0")
+if __name__ == "__main__":
+    app.run("0.0.0.0")

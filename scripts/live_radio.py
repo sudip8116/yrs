@@ -14,7 +14,6 @@ class Song:
         try:
             with open(self.path, "r") as f:
                 self.duration = self._parse_duration(f.read())
-
         except Exception as e:
             print(f"[Song] Error loading {path}: {e}")
 
@@ -44,31 +43,22 @@ class AudioManager:
 
     def __init__(self):
         PathManager.create_path(self.audio_path)
-        self.song_list = []
-        self.load_song_list()
 
-    def get_song(self, index: int):
-        if not (0 <= index < len(self.song_list)):
-            return False, None
-        path = PathManager.get_path(f"{self.audio_path}/{self.song_list[index]}")
-        return True, path
-
-    def get_random_index(self) -> int:
-        return randint(1111, 9999) % len(self.song_list) if self.song_list else -1
-
-    def is_empty(self) -> bool:
-        return not self.song_list
-
-    def load_song_list(self):
+    def get_song_list(self):
         try:
             path = PathManager.get_path(self.audio_path)
-            self.song_list = [
+            return [
                 f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))
             ]
-            print(f"[AudioManager] Loaded {len(self.song_list)} songs.")
         except Exception as e:
             print(f"[AudioManager] Failed to load song list: {e}")
-            self.song_list = []
+            return []
+
+    def get_song(self, file_name):
+        path = PathManager.get_path(f"{self.audio_path}/{file_name}")
+        if os.path.exists(path):
+            return True, path
+        return False, None
 
     def save_song(self, file_name, song_json):
         with open(
@@ -147,14 +137,12 @@ class LiveRadio:
         self.song_id = 0
         self.current_song: "Song" = None
         self.lock = Lock()
-
         self.running = False
         self.thread: Thread | None = None
+        self.current_time = 0
 
     def _update_start_data(self):
-
         self.song_id = randint(1111, 9999)
-
         self.background.pick_random()
         VarManager.set("song-path", {"path": str(self.current_song.path)})
         VarManager.set(
@@ -164,35 +152,41 @@ class LiveRadio:
             "bi-si", {"bi": self.background.current_index, "si": self.song_id}
         )
 
-    def _load_song(self):
-        if self.audio.is_empty():
+    def _load_song(self, next_song=False):
+        songs = self.audio.get_song_list()
+        if not songs:
             print("[LiveRadio] ⚠️ No songs available.")
+            self.current_song = None
             return
 
-        self.play_index = self.audio.get_random_index()
-        suc, song_path = self.audio.get_song(self.play_index)
+        if next_song:
+            self.play_index = (self.play_index + 1) % len(songs)
+        else:
+            # start from first if not playing yet
+            self.play_index = 0
+
+        suc, song_path = self.audio.get_song(songs[self.play_index])
         if suc:
             self.current_song = Song(song_path)
             self._update_start_data()
-            print(f"[LiveRadio] ▶ Now playing index {self.play_index}")
+            print(f"[LiveRadio] ▶ Now playing: {songs[self.play_index]}")
         else:
-            self._load_song()
+            print(f"[LiveRadio] ⚠️ Failed to load: {songs[self.play_index]}")
+            self._load_song(next_song=True)
 
     def start(self):
         if self.thread and self.thread.is_alive():
             print("[LiveRadio] Already running.")
             return
         self.running = True
-        self.thread = Thread(
-            target=self._thread_loop, daemon=False, name="LiveRadioThread"
-        )
+        self.thread = Thread(target=self._thread_loop, daemon=False, name="LiveRadioThread")
         self.thread.start()
         print("[LiveRadio] 🟢 Radio started.")
 
     def stop(self):
         self.running = False
         if self.thread and self.thread.is_alive():
-            self.thread.join(timeout=5)
+            self.thread.join(timeout=2)
         print("[LiveRadio] 🔴 Radio stopped.")
 
     def restart(self):
@@ -209,7 +203,7 @@ class LiveRadio:
                     continue
 
                 if self.current_time >= self.current_song.duration:
-                    self._load_song()
+                    self._load_song(next_song=True)
                     self.current_time = 0
 
                 self.current_time += 1
